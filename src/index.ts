@@ -1,11 +1,11 @@
 export interface Attribute {
   name?: string;
-  type: DataType;
+  type: Type;
   code?: string;
   typeof?: Metadata;
 }
 
-export enum DataType {
+export enum Type {
   ObjectId = 'ObjectId',
   Date = 'date',
   Boolean = 'boolean',
@@ -32,24 +32,25 @@ export interface ErrorMessage {
 
 const _datereg = '/Date(';
 const _re = /-?\d+/;
-
-export function toDate(dateStr: any) {
-  if (dateStr instanceof Date) {
-    return dateStr;
-  }
-  if (!dateStr || dateStr === '') {
+function toDate(v: any) {
+  if (!v || v === '') {
     return null;
   }
-  const i = dateStr.indexOf(_datereg);
+  if (v instanceof Date) {
+    return v;
+  } else if (typeof v === 'number') {
+    return new Date(v);
+  }
+  const i = v.indexOf(_datereg);
   if (i >= 0) {
-    const m = _re.exec(dateStr);
+    const m = _re.exec(v);
     const d = parseInt(m[0], null);
     return new Date(d);
   } else {
-    if (isNaN(dateStr)) {
-      return new Date(dateStr);
+    if (isNaN(v)) {
+      return new Date(v);
     } else {
-      const d = parseInt(dateStr, null);
+      const d = parseInt(v, null);
       return new Date(d);
     }
   }
@@ -67,105 +68,88 @@ function createError(path: string, name: string, code: string): ErrorMessage {
   return error;
 }
 
-function validateObject(obj: any, meta: Metadata, errors: ErrorMessage[], path: string, max?: number): void {
+function validateObject(obj: any, meta: Metadata, errors: ErrorMessage[], path: string, max?: number, allowUndefined?: boolean): void {
   const keys = Object.keys(obj);
   for (const key of keys) {
     const attr: Attribute = meta.attributes[key];
     if (!attr) {
-      const error = createError(path, key, 'undefined');
-      errors.push(error);
+      if (!allowUndefined) {
+        errors.push(createError(path, key, 'undefined'));
+      }
     } else {
-      const name = attr.name;
-      const v = obj[name];
+      const na = attr.name;
+      const v = obj[na];
       if (v) {
         switch (attr.type) {
-          case DataType.String: {
+          case Type.String: {
             if (typeof v !== 'string') {
-              const error = createError(path, name, 'string');
-              errors.push(error);
+              errors.push(createError(path, na, 'string'));
               if (errors.length >= max) {
                 return;
               }
             }
             break;
           }
-          case DataType.Number:
-          case DataType.Integer: {
+          case Type.Number:
+          case Type.Integer: {
             // If value is not number
             if (typeof v !== 'number') {
-              const error = createError(path, name, 'number');
-              errors.push(error);
+              errors.push(createError(path, na, 'number'));
               if (errors.length >= max) {
                 return;
               }
             }
             break;
           }
-          case DataType.Date: {
+          case Type.Date: {
             // If value is not date
             const date = toDate(v);
             const error = date.toString();
             if (!(date instanceof Date) || error === 'Invalid Date') {
-              const err = createError(path, name, 'date');
-              errors.push(err);
+              errors.push(createError(path, na, 'date'));
               if (errors.length >= max) {
                 return;
               }
             }
             break;
           }
-          case DataType.Boolean: {
+          case Type.Boolean: {
             // If value is not bool
             if ((typeof v === 'boolean') !== true) {
-              const err = createError(path, name, 'boolean');
-              errors.push(err);
+              errors.push(createError(path, na, 'boolean'));
               if (errors.length >= max) {
                 return;
               }
             }
             break;
           }
-          case DataType.Object: {
+          case Type.Object: {
             if (typeof v !== 'object') {
-              const err = createError(path, name, 'object');
-              errors.push(err);
-              if (errors.length >= max) {
-                return;
-              }
+              errors.push(createError(path, na, 'object'));
             } else {
               if (Array.isArray(v)) {
-                const err = createError(path, name, 'object');
-                errors.push(err);
-                if (errors.length >= max) {
-                  return;
-                }
+                errors.push(createError(path, na, 'object'));
               } else {
                 const x = (path != null && path.length > 0 ? path + '.' + key : key);
                 validateObject(v, attr.typeof, errors, x);
               }
             }
+            if (errors.length >= max) {
+              return;
+            }
             break;
           }
-          case DataType.Array: {
+          case Type.Array: {
             if (typeof v !== 'object') {
-              const err = createError(path, name, 'array');
-              errors.push(err);
-              if (errors.length >= max) {
-                return;
-              }
+              errors.push(createError(path, na, 'array'));
             } else {
               if (!Array.isArray(v)) {
-                const err = createError(path, name, 'array');
-                errors.push(err);
-                if (errors.length >= max) {
-                  return;
-                }
+                errors.push(createError(path, na, 'array'));
               } else {
                 for (let i = 0; i < v.length; i++) {
                   if (typeof v !== 'object') {
                     const y = (path != null && path.length > 0 ? path + '.' + key + '[' + i + ']' : key + '[' + i + ']');
-                    const err = createError('', y, 'object');
-                    errors.push(err);
+                    errors.push(createError('', y, 'object'));
                     if (errors.length >= max) {
                       return;
                     }
@@ -176,19 +160,17 @@ function validateObject(obj: any, meta: Metadata, errors: ErrorMessage[], path: 
                 }
               }
             }
+            if (errors.length >= max) {
+              return;
+            }
             break;
           }
-          case DataType.Primitives: {
+          case Type.Primitives: {
             if (typeof v !== 'object') {
-              const err = createError(path, name, 'array');
-              errors.push(err);
+              errors.push(createError(path, na, 'array'));
             } else {
               if (!Array.isArray(v)) {
-                const err = createError(path, name, 'array');
-                errors.push(err);
-                if (errors.length >= max) {
-                  return;
-                }
+                errors.push(createError(path, na, 'array'));
               } else {
                 if (attr.code) {
                   if (attr.code === 'date') {
@@ -198,8 +180,7 @@ function validateObject(obj: any, meta: Metadata, errors: ErrorMessage[], path: 
                         const error = date.toString();
                         if (!(date instanceof Date) || error === 'Invalid Date') {
                           const y = (path != null && path.length > 0 ? path + '.' + key + '[' + i + ']' : key + '[' + i + ']');
-                          const err = createError('', y, 'date');
-                          errors.push(err);
+                          errors.push(createError('', y, 'date'));
                           if (errors.length >= max) {
                             return;
                           }
@@ -210,8 +191,7 @@ function validateObject(obj: any, meta: Metadata, errors: ErrorMessage[], path: 
                     for (let i = 0; i < v.length; i++) {
                       if (v[i] && typeof v[i] !== attr.code) {
                         const y = (path != null && path.length > 0 ? path + '.' + key + '[' + i + ']' : key + '[' + i + ']');
-                        const err = createError('', y, attr.code);
-                        errors.push(err);
+                        errors.push(createError('', y, attr.code));
                         if (errors.length >= max) {
                           return;
                         }
@@ -220,6 +200,9 @@ function validateObject(obj: any, meta: Metadata, errors: ErrorMessage[], path: 
                   }
                 }
               }
+            }
+            if (errors.length >= max) {
+              return;
             }
             break;
           }
@@ -232,9 +215,13 @@ function validateObject(obj: any, meta: Metadata, errors: ErrorMessage[], path: 
   }
 }
 
-export function validateTypes(obj: any, meta: Metadata, max?: number): ErrorMessage[] {
+export function validateTypes(obj: any, meta: Metadata, max?: number, allowUndefined?: boolean): ErrorMessage[] {
   const errors: ErrorMessage[] = [];
   const path = '';
-  validateObject(obj, meta, errors, path, max);
+  if (max == null) {
+    validateObject(obj, meta, errors, path, undefined, allowUndefined);
+  } else {
+    validateObject(obj, meta, errors, path, max, allowUndefined);
+  }
   return errors;
 }
