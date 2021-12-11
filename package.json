@@ -1,6 +1,6 @@
 {
   "name": "types-validation",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Validate types",
   "main": "./lib/index.js",
   "types": "./src/index.ts",
@@ -17,10 +17,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com/common-ts/types-validation"
+    "url": "git@github.com/core-ts/types-validation"
   },
   "keywords": [
-    "types-validation",
-    "typesvalidation"
+    "types-validation"
   ]
 }
